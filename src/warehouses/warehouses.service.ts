@@ -3,49 +3,45 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
 import { WarehouseResponseDto } from './dto/warehouse-response.dto';
+import { WarehousesRepository } from './warehouses.repository';
+import { IWarehouseService } from './interfaces/warehouse.interface';
+import { WAREHOUSE_ERROR_MESSAGES } from './constants/warehouse.constants';
 
 @Injectable()
-export class WarehousesService {
-  constructor(private readonly prisma: PrismaService) {}
+export class WarehousesService implements IWarehouseService {
+  constructor(private readonly repository: WarehousesRepository) {}
 
   async create(
     createWarehouseDto: CreateWarehouseDto,
   ): Promise<WarehouseResponseDto> {
-    const existingWarehouse = await this.prisma.warehouse.findUnique({
-      where: { code: createWarehouseDto.code },
-    });
+    const existingWarehouse = await this.repository.findByCode(
+      createWarehouseDto.code,
+    );
 
     if (existingWarehouse) {
       throw new ConflictException(
-        `Warehouse with code ${createWarehouseDto.code} already exists`,
+        WAREHOUSE_ERROR_MESSAGES.ALREADY_EXISTS(createWarehouseDto.code),
       );
     }
 
-    const warehouse = await this.prisma.warehouse.create({
-      data: createWarehouseDto,
-    });
+    const warehouse = await this.repository.create(createWarehouseDto);
 
     return new WarehouseResponseDto(warehouse);
   }
 
   async findAll(): Promise<WarehouseResponseDto[]> {
-    const warehouses = await this.prisma.warehouse.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    const warehouses = await this.repository.findAll();
 
     return warehouses.map((warehouse) => new WarehouseResponseDto(warehouse));
   }
 
   async findOne(id: string): Promise<WarehouseResponseDto> {
-    const warehouse = await this.prisma.warehouse.findUnique({
-      where: { id },
-    });
+    const warehouse = await this.repository.findById(id);
 
     if (!warehouse) {
-      throw new NotFoundException(`Warehouse with ID ${id} not found`);
+      throw new NotFoundException(WAREHOUSE_ERROR_MESSAGES.NOT_FOUND(id));
     }
 
     return new WarehouseResponseDto(warehouse);
