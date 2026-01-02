@@ -12,3 +12,62 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stocks       WarehouseStock[]
+  transactions StockTransaction[]
+
+  @@map("warehouses")
+}
+
+model Sparepart {
+  id        String   @id @default(uuid())
+  name      String
+  sku       String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  stocks       WarehouseStock[]
+  transactions StockTransaction[]
+
+  @@map("spareparts")
+}
+
+model WarehouseStock {
+  id           String   @id @default(uuid())
+  warehouseId  String   @map("warehouse_id")
+  sparepartId  String   @map("sparepart_id")
+  currentStock Int      @map("current_stock")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  sparepart Sparepart @relation(fields: [sparepartId], references: [id])
+
+  @@unique([warehouseId, sparepartId])
+  @@map("warehouse_stocks")
+}
+
+enum TransactionType {
+  IN
+  OUT
+}
+
+model StockTransaction {
+  id          String          @id @default(uuid())
+  warehouseId String          @map("warehouse_id")
+  sparepartId String          @map("sparepart_id")
+  type        TransactionType
+  quantity    Int
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  sparepart Sparepart @relation(fields: [sparepartId], references: [id])
+
+  @@map("stock_transactions")
+}
