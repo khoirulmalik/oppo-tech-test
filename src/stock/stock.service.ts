@@ -28,7 +28,6 @@ export class StockService {
   async stockIn(stockInDto: StockInDto): Promise<StockTransactionResponseDto> {
     const { warehouseId, sparepartId, quantity } = stockInDto;
 
-    // Validate warehouse exists
     const warehouse = await this.warehouseRepository.findById(warehouseId);
     if (!warehouse) {
       throw new NotFoundException(
@@ -44,14 +43,12 @@ export class StockService {
       );
     }
 
-    // Validate quantity
     if (quantity <= 0) {
       throw new BadRequestException(STOCK_ERROR_MESSAGES.INVALID_QUANTITY);
     }
 
     // Use transaction for stock IN
     const transaction = await this.prisma.$transaction(async (prisma) => {
-      // Find existing stock
       const existingStock = await prisma.warehouseStock.findUnique({
         where: {
           warehouseId_sparepartId: {
@@ -63,7 +60,6 @@ export class StockService {
 
       let stock;
       if (existingStock) {
-        // Update existing stock
         stock = await prisma.warehouseStock.update({
           where: { id: existingStock.id },
           data: {
@@ -71,7 +67,6 @@ export class StockService {
           },
         });
       } else {
-        // Create new stock entry
         stock = await prisma.warehouseStock.create({
           data: {
             warehouseId,
@@ -102,7 +97,6 @@ export class StockService {
   ): Promise<StockTransactionResponseDto> {
     const { warehouseId, sparepartId, quantity } = stockOutDto;
 
-    // Validate warehouse exists
     const warehouse = await this.warehouseRepository.findById(warehouseId);
     if (!warehouse) {
       throw new NotFoundException(
@@ -110,7 +104,6 @@ export class StockService {
       );
     }
 
-    // Validate sparepart exists
     const sparepart = await this.sparepartRepository.findById(sparepartId);
     if (!sparepart) {
       throw new NotFoundException(
@@ -118,20 +111,28 @@ export class StockService {
       );
     }
 
-    // Validate quantity
     if (quantity <= 0) {
       throw new BadRequestException(STOCK_ERROR_MESSAGES.INVALID_QUANTITY);
     }
 
     // Use transaction with locking for stock OUT
     const transaction = await this.prisma.$transaction(async (prisma) => {
-      // Lock the stock row using raw query
-      const stockRows = await prisma.$queryRaw<any[]>`
+      const query = `
         SELECT * FROM warehouse_stocks
-        WHERE warehouse_id = ${warehouseId}::uuid
-        AND sparepart_id = ${sparepartId}::uuid
+        WHERE warehouse_id = '${warehouseId}'
+        AND sparepart_id = '${sparepartId}'
         FOR UPDATE
       `;
+
+      const stockRows = await prisma.$queryRawUnsafe<
+        Array<{
+          id: string;
+          warehouse_id: string;
+          sparepart_id: string;
+          current_stock: number;
+          updated_at: Date;
+        }>
+      >(query);
 
       if (stockRows.length === 0) {
         throw new NotFoundException(
@@ -142,7 +143,6 @@ export class StockService {
       const existingStock = stockRows[0];
       const currentStock = existingStock.current_stock;
 
-      // Validate sufficient stock
       if (currentStock < quantity) {
         throw new BadRequestException(
           STOCK_ERROR_MESSAGES.INSUFFICIENT_STOCK(currentStock, quantity),
@@ -150,14 +150,13 @@ export class StockService {
       }
 
       // Update stock
-      const stock = await prisma.warehouseStock.update({
+      await prisma.warehouseStock.update({
         where: { id: existingStock.id },
         data: {
           currentStock: currentStock - quantity,
         },
       });
 
-      // Create transaction record
       const stockTransaction = await prisma.stockTransaction.create({
         data: {
           warehouseId,

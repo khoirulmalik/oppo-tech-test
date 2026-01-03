@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TransactionType } from '@prisma/client';
+import { TransactionType, Prisma } from '@prisma/client';
 import {
   IStockRepository,
   IWarehouseStock,
@@ -30,24 +30,35 @@ export class StockRepository implements IStockRepository {
     warehouseId: string,
     sparepartId: string,
   ): Promise<IWarehouseStock | null> {
-    const stock = await this.prisma.$queryRaw<IWarehouseStock[]>`
-      SELECT * FROM warehouse_stocks
-      WHERE warehouse_id = ${warehouseId}::uuid
-      AND sparepart_id = ${sparepartId}::uuid
-      FOR UPDATE
-    `;
+    const stock = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        warehouse_id: string;
+        sparepart_id: string;
+        current_stock: number;
+        updated_at: Date;
+      }>
+    >(
+      Prisma.sql`
+        SELECT * FROM warehouse_stocks
+        WHERE warehouse_id = ${warehouseId}::uuid
+        AND sparepart_id = ${sparepartId}::uuid
+        FOR UPDATE
+      `,
+    );
 
     if (stock.length === 0) {
       return null;
     }
 
     const result = stock[0];
+
     return {
       id: result.id,
-      warehouseId: result['warehouse_id' as keyof typeof result] as string,
-      sparepartId: result['sparepart_id' as keyof typeof result] as string,
-      currentStock: result['current_stock' as keyof typeof result] as number,
-      updatedAt: result['updated_at' as keyof typeof result] as Date,
+      warehouseId: result.warehouse_id,
+      sparepartId: result.sparepart_id,
+      currentStock: result.current_stock,
+      updatedAt: result.updated_at,
       createdAt: new Date(),
     } as IWarehouseStock;
   }
