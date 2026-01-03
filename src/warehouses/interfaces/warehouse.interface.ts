@@ -1,8 +1,8 @@
-export interface IWarehouse {
-  id: string;
+import { IBaseEntity } from '../../shared/interfaces';
+
+export interface IWarehouse extends IBaseEntity {
   name: string;
   code: string;
-  createdAt: Date;
 }
 
 export interface ICreateWarehouse {

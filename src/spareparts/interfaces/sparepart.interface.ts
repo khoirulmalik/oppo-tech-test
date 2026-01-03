@@ -1,9 +1,8 @@
-export interface ISparepart {
-  id: string;
+import { IBaseEntityWithUpdate } from '../../shared/interfaces';
+
+export interface ISparepart extends IBaseEntityWithUpdate {
   name: string;
   sku: string;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 export interface ICreateSparepart {
