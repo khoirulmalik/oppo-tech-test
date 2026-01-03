@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TransactionType, Prisma } from '@prisma/client';
+import { TransactionType } from '@prisma/client';
 import {
   IStockRepository,
   IWarehouseStock,
@@ -30,7 +30,7 @@ export class StockRepository implements IStockRepository {
     warehouseId: string,
     sparepartId: string,
   ): Promise<IWarehouseStock | null> {
-    const stock = await this.prisma.$queryRaw<
+    const stock = await this.prisma.$queryRawUnsafe<
       Array<{
         id: string;
         warehouse_id: string;
@@ -39,12 +39,14 @@ export class StockRepository implements IStockRepository {
         updated_at: Date;
       }>
     >(
-      Prisma.sql`
+      `
         SELECT * FROM warehouse_stocks
-        WHERE warehouse_id = ${warehouseId}::uuid
-        AND sparepart_id = ${sparepartId}::uuid
+        WHERE warehouse_id = $1::uuid
+        AND sparepart_id = $2::uuid
         FOR UPDATE
       `,
+      warehouseId,
+      sparepartId,
     );
 
     if (stock.length === 0) {
@@ -59,7 +61,6 @@ export class StockRepository implements IStockRepository {
       sparepartId: result.sparepart_id,
       currentStock: result.current_stock,
       updatedAt: result.updated_at,
-      createdAt: new Date(),
     } as IWarehouseStock;
   }
 

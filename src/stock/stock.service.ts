@@ -28,6 +28,7 @@ export class StockService {
   async stockIn(stockInDto: StockInDto): Promise<StockTransactionResponseDto> {
     const { warehouseId, sparepartId, quantity } = stockInDto;
 
+    // Validate warehouse exists
     const warehouse = await this.warehouseRepository.findById(warehouseId);
     if (!warehouse) {
       throw new NotFoundException(
@@ -43,31 +44,37 @@ export class StockService {
       );
     }
 
+    // Validate quantity
     if (quantity <= 0) {
       throw new BadRequestException(STOCK_ERROR_MESSAGES.INVALID_QUANTITY);
     }
 
-    // Use transaction for stock IN
-    const transaction = await this.prisma.$transaction(async (prisma) => {
-      const existingStock = await prisma.warehouseStock.findUnique({
-        where: {
-          warehouseId_sparepartId: {
-            warehouseId,
-            sparepartId,
-          },
-        },
-      });
+    const transaction = await this.prisma.$transaction(async (tx) => {
+      const stockRows = await tx.$queryRawUnsafe<
+        Array<{
+          id: string;
+          warehouse_id: string;
+          sparepart_id: string;
+          current_stock: number;
+          updated_at: Date;
+        }>
+      >(
+        `SELECT * FROM warehouse_stocks WHERE warehouse_id = $1 AND sparepart_id = $2 FOR UPDATE`,
+        warehouseId,
+        sparepartId,
+      );
 
       let stock;
-      if (existingStock) {
-        stock = await prisma.warehouseStock.update({
+      if (stockRows.length > 0) {
+        // Update existing stock
+        const existingStock = stockRows[0];
+        stock = await tx.warehouseStock.update({
           where: { id: existingStock.id },
-          data: {
-            currentStock: existingStock.currentStock + quantity,
-          },
+          data: { currentStock: existingStock.current_stock + quantity },
         });
       } else {
-        stock = await prisma.warehouseStock.create({
+        // Create new stock entry if doesn't exist
+        stock = await tx.warehouseStock.create({
           data: {
             warehouseId,
             sparepartId,
@@ -77,7 +84,7 @@ export class StockService {
       }
 
       // Create transaction record
-      const stockTransaction = await prisma.stockTransaction.create({
+      const stockTransaction = await tx.stockTransaction.create({
         data: {
           warehouseId,
           sparepartId,
@@ -97,6 +104,7 @@ export class StockService {
   ): Promise<StockTransactionResponseDto> {
     const { warehouseId, sparepartId, quantity } = stockOutDto;
 
+    // Validate warehouse exists
     const warehouse = await this.warehouseRepository.findById(warehouseId);
     if (!warehouse) {
       throw new NotFoundException(
@@ -104,6 +112,7 @@ export class StockService {
       );
     }
 
+    // Validate sparepart exists
     const sparepart = await this.sparepartRepository.findById(sparepartId);
     if (!sparepart) {
       throw new NotFoundException(
@@ -111,20 +120,14 @@ export class StockService {
       );
     }
 
+    // Validate quantity
     if (quantity <= 0) {
       throw new BadRequestException(STOCK_ERROR_MESSAGES.INVALID_QUANTITY);
     }
 
     // Use transaction with locking for stock OUT
-    const transaction = await this.prisma.$transaction(async (prisma) => {
-      const query = `
-        SELECT * FROM warehouse_stocks
-        WHERE warehouse_id = '${warehouseId}'
-        AND sparepart_id = '${sparepartId}'
-        FOR UPDATE
-      `;
-
-      const stockRows = await prisma.$queryRawUnsafe<
+    const transaction = await this.prisma.$transaction(async (tx) => {
+      const stockRows = await tx.$queryRawUnsafe<
         Array<{
           id: string;
           warehouse_id: string;
@@ -132,8 +135,13 @@ export class StockService {
           current_stock: number;
           updated_at: Date;
         }>
-      >(query);
+      >(
+        `SELECT * FROM warehouse_stocks WHERE warehouse_id = $1 AND sparepart_id = $2 FOR UPDATE`,
+        warehouseId,
+        sparepartId,
+      );
 
+      // Check if stock exists
       if (stockRows.length === 0) {
         throw new NotFoundException(
           STOCK_ERROR_MESSAGES.STOCK_NOT_FOUND(warehouseId, sparepartId),
@@ -143,21 +151,21 @@ export class StockService {
       const existingStock = stockRows[0];
       const currentStock = existingStock.current_stock;
 
+      // Validate sufficient stock
       if (currentStock < quantity) {
         throw new BadRequestException(
           STOCK_ERROR_MESSAGES.INSUFFICIENT_STOCK(currentStock, quantity),
         );
       }
 
-      // Update stock
-      await prisma.warehouseStock.update({
+      // Update stock (reduce)
+      await tx.warehouseStock.update({
         where: { id: existingStock.id },
-        data: {
-          currentStock: currentStock - quantity,
-        },
+        data: { currentStock: currentStock - quantity },
       });
 
-      const stockTransaction = await prisma.stockTransaction.create({
+      // Create transaction record
+      const stockTransaction = await tx.stockTransaction.create({
         data: {
           warehouseId,
           sparepartId,
