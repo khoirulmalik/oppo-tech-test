@@ -81,13 +81,8 @@ This system implements database transactions with `SELECT FOR UPDATE` row-level 
 ## Database Design
 
 ### Entity Relationship Diagram
-
-```
-warehouses (1) ----< (M) warehouse_stocks (M) >---- (1) spareparts
-     |                         |                           |
-     |                         |                           |
-     +----< stock_transactions >----------------------------+
-```
+ERD Overview
+![Entity Relationship Diagram](/warehouse-stock-management/erd.png)
 
 ### Tables
 
