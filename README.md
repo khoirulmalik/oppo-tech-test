@@ -82,7 +82,7 @@ This system implements database transactions with `SELECT FOR UPDATE` row-level 
 
 ### Entity Relationship Diagram
 ERD Overview
-![Entity Relationship Diagram](/warehouse-stock-management/erd.png)
+![Entity Relationship Diagram](/oppo-tech-test/erd.png)
 
 ### Tables
 
