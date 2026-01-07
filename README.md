@@ -82,7 +82,7 @@ This system implements database transactions with `SELECT FOR UPDATE` row-level 
 
 ### Entity Relationship Diagram
 ERD Overview
-![Entity Relationship Diagram](/oppo-tech-test/erd.png)
+The ERD can be found in the **repository root folder** (`erd.png`).
 
 ### Tables
 
